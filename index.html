@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="cn">
+
+<head>
+  <meta http-equiv="X-Clacks-Overhead" content="GNU Terry Pratchett" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Listen · 4587</title>
+  <meta name="description" content="听 — 一个人的歌单收藏" />
+  <meta property="og:title" content="Listen · 4587" />
+  <meta property="og:description" content="听 — 一个人的歌单收藏" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://listen.4587.fun/" />
+  <link rel="shortcut icon" href="favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Noto+Serif+SC:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0e0e10;
+      --bg-soft: #16161a;
+      --ink: #e7e3da;
+      --ink-dim: #8a867d;
+      --line: #2a2a30;
+      --accent: #c9a86a;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Noto Serif SC', 'Cormorant Garamond', serif;
+      font-weight: 300;
+      display: flex;
+      flex-direction: column;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at 50% 30%, transparent 55%, rgba(0,0,0,0.55) 100%);
+      z-index: 2;
+    }
+
+    .wrap {
+      flex: 1;
+      width: 100%;
+      max-width: 44rem;
+      margin: 0 auto;
+      padding: 10vh 6vw 10rem;   /* bottom room for the now-playing bar */
+      position: relative;
+      z-index: 3;
+    }
+
+    /* ---- masthead ---- */
+    header { text-align: center; margin-bottom: 3.5rem; animation: rise 1s var(--ease) both; }
+    .home-link {
+      display: inline-block;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.15em;
+      color: var(--ink-dim);
+      text-decoration: none;
+      margin-bottom: 1.6rem;
+      transition: color 0.4s var(--ease);
+    }
+    .home-link:hover { color: var(--accent); }
+    .home-link::before { content: "← "; }
+
+    .title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(3rem, 10vw, 5rem);
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      line-height: 1;
+    }
+    .subtitle {
+      margin-top: 0.8rem;
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-size: 1.1rem;
+      color: var(--ink-dim);
+    }
+
+    /* ---- search ---- */
+    .search { position: relative; margin-bottom: 2.5rem; animation: rise 1s var(--ease) 0.1s both; }
+    .search input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--line);
+      padding: 0.9rem 0.2rem 0.9rem 1.8rem;
+      color: var(--ink);
+      font-family: 'Noto Serif SC', serif;
+      font-size: 1rem;
+      font-weight: 300;
+      letter-spacing: 0.05em;
+      outline: none;
+      transition: border-color 0.4s var(--ease);
+    }
+    .search input::placeholder { color: #56534b; letter-spacing: 0.1em; }
+    .search input:focus { border-color: var(--accent); }
+    .search .icon {
+      position: absolute; left: 0; top: 50%;
+      transform: translateY(-50%);
+      color: var(--ink-dim); font-size: 1rem; pointer-events: none;
+    }
+
+    /* ---- track list ---- */
+    .list { list-style: none; animation: rise 1s var(--ease) 0.2s both; }
+    .track {
+      border-top: 1px solid var(--line);
+      display: flex; align-items: baseline; gap: 1rem;
+      padding: 1.25rem 0.4rem;
+      cursor: pointer; user-select: none;
+      transition: background 0.4s var(--ease);
+    }
+    .list .track:last-child { border-bottom: 1px solid var(--line); }
+    .track.playing { background: var(--bg-soft); }
+    .track-num {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.9rem; color: #56534b; min-width: 1.6rem;
+      transition: color 0.4s var(--ease);
+    }
+    .track.playing .track-num { color: var(--accent); }
+    .track-meta { flex: 1; min-width: 0; }
+    .track-name { font-size: 1.05rem; font-weight: 400; color: var(--ink); transition: color 0.4s var(--ease); }
+    .track.playing .track-name { color: var(--accent); }
+    .track-artist {
+      font-size: 0.82rem; color: var(--ink-dim); margin-top: 0.2rem;
+      font-family: 'Cormorant Garamond', serif; font-style: italic; letter-spacing: 0.02em;
+    }
+    .track-play {
+      font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--ink-dim);
+      transition: color 0.4s var(--ease);
+    }
+    .track:hover .track-play { color: var(--accent); }
+    .track.playing .track-play { color: var(--accent); }
+
+    .empty {
+      text-align: center; color: #56534b;
+      font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.1rem;
+      padding: 3rem 1rem; border: none;
+    }
+
+    /* ---- now-playing bar ---- */
+    .bar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+      background: rgba(14,14,16,0.92);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--line);
+      padding: 0.9rem max(6vw, calc(50vw - 22rem));
+      display: flex; align-items: center; gap: 1.2rem;
+      transform: translateY(110%);
+      transition: transform 0.55s var(--ease);
+    }
+    .bar.up { transform: translateY(0); }
+    .bar-info { min-width: 0; flex-shrink: 0; width: 12rem; }
+    .bar-name {
+      font-size: 0.95rem; color: var(--accent);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .bar-artist {
+      font-size: 0.75rem; color: var(--ink-dim); margin-top: 0.15rem;
+      font-family: 'Cormorant Garamond', serif; font-style: italic;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .bar audio {
+      flex: 1;
+      height: 40px;
+      filter: invert(0.85) sepia(0.2) saturate(0.6) hue-rotate(5deg);
+    }
+
+    /* ---- entry overlay ---- */
+    .overlay {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(10,10,12,0.96);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; text-align: center;
+      transition: opacity 0.6s var(--ease);
+    }
+    .overlay.gone { opacity: 0; pointer-events: none; }
+    .overlay .glyph {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(3rem, 12vw, 6rem); color: var(--accent);
+      line-height: 1; animation: pulse 2.4s ease-in-out infinite;
+    }
+    .overlay .hint {
+      margin-top: 1.4rem;
+      font-family: 'Cormorant Garamond', serif; font-style: italic;
+      font-size: 1.15rem; color: var(--ink-dim); letter-spacing: 0.05em;
+    }
+
+    footer {
+      position: relative; z-index: 3; text-align: center;
+      padding: 2.5rem 1rem; font-size: 0.72rem; letter-spacing: 0.18em; color: #56534b;
+    }
+
+    @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+    @media (max-width: 640px) {
+      .bar { padding: 0.8rem 5vw; gap: 0.8rem; flex-wrap: wrap; }
+      .bar-info { width: 100%; text-align: center; }
+      .bar audio { flex: 1 0 100%; }
+      .wrap { padding-bottom: 12rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      header, .search, .list { animation: none; }
+      .overlay .glyph { animation: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="wrap">
+    <header>
+      <h1 class="title">Listen</h1>
+    </header>
+
+    <div class="search">
+      <span class="icon">⌕</span>
+      <input id="q" type="text" placeholder="搜索歌名或艺人" autocomplete="off" spellcheck="false" />
+    </div>
+
+    <ul class="list" id="list"></ul>
+  </main>
+
+  <!-- persistent now-playing bar: survives search re-renders, drives the loop -->
+  <div class="bar" id="bar">
+    <div class="bar-info">
+      <div class="bar-name" id="barName">—</div>
+      <div class="bar-artist" id="barArtist"></div>
+    </div>
+    <audio id="player" controls></audio>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="glyph">♪</div>
+    <div class="hint">点击任意处，开始聆听</div>
+  </div>
+
+  <footer>Copyright © 2018–2046 4587 · all rights reserved</footer>
+
+  <script>
+    // Playlist comes from songs.json, generated at build time by scanning
+    // static/audios/. To add a song: upload the mp3. To hide one: prefix
+    // its filename with "_". No code edits needed.
+    let TRACKS = [];
+
+    const listEl   = document.getElementById('list');
+    const qEl      = document.getElementById('q');
+    const player   = document.getElementById('player');
+    const bar      = document.getElementById('bar');
+    const barName  = document.getElementById('barName');
+    const barArtist= document.getElementById('barArtist');
+    const overlay  = document.getElementById('overlay');
+
+    let currentIdx = -1; // index into TRACKS of the playing song
+
+    function render(filter) {
+      const f = (filter || '').trim().toLowerCase();
+      listEl.innerHTML = '';
+      const shown = TRACKS.filter(t =>
+        !f || t.name.toLowerCase().includes(f) || (t.artist || '').toLowerCase().includes(f)
+      );
+      if (!shown.length) {
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = '没有找到';
+        listEl.appendChild(li);
+        return;
+      }
+      shown.forEach((t) => {
+        const idx = TRACKS.indexOf(t);
+        const li = document.createElement('li');
+        li.className = 'track' + (idx === currentIdx ? ' playing' : '');
+        li.dataset.idx = idx;
+        li.innerHTML =
+          '<span class="track-num">' + String(idx + 1).padStart(2, '0') + '</span>' +
+          '<div class="track-meta">' +
+            '<div class="track-name">' + t.name + '</div>' +
+            (t.artist ? '<div class="track-artist">' + t.artist + '</div>' : '') +
+          '</div>' +
+          '<span class="track-play">' + (idx === currentIdx ? '❚❚' : '▸') + '</span>';
+        li.addEventListener('click', () => play(idx));
+        listEl.appendChild(li);
+      });
+    }
+
+    function play(idx) {
+      currentIdx = idx;
+      const t = TRACKS[idx];
+      player.src = t.src;
+      barName.textContent = t.name;
+      barArtist.textContent = t.artist || '';
+      bar.classList.add('up');
+      player.play().catch(() => {});
+      render(qEl.value); // refresh highlight + play/pause glyphs
+    }
+
+    function playRandom() {
+      if (TRACKS.length === 0) return;
+      let next = Math.floor(Math.random() * TRACKS.length);
+      // avoid immediately repeating the same song when more than one exists
+      if (TRACKS.length > 1 && next === currentIdx) next = (next + 1) % TRACKS.length;
+      play(next);
+    }
+
+    // infinite loop: when a song ends, jump to another random one
+    player.addEventListener('ended', playRandom);
+    // keep list glyphs in sync if user pauses/plays via the bar controls
+    player.addEventListener('pause', () => render(qEl.value));
+    player.addEventListener('play',  () => render(qEl.value));
+
+    qEl.addEventListener('input', () => render(qEl.value));
+
+    // entry: first interaction unlocks autoplay, then start a random song
+    function start() {
+      if (!TRACKS.length) return;
+      overlay.classList.add('gone');
+      playRandom();
+    }
+    overlay.addEventListener('click', start);
+
+    // load the build-time manifest, then render
+    fetch('songs.json', { cache: 'no-cache' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => { TRACKS = Array.isArray(data) ? data : []; render(''); })
+      .catch(() => { TRACKS = []; render(''); });
+  </script>
+</body>
+
+</html>
