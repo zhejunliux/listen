@@ -171,11 +171,60 @@
       font-family: 'Cormorant Garamond', serif; font-style: italic;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .bar audio {
-      flex: 1;
-      height: 40px;
-      filter: invert(0.85) sepia(0.2) saturate(0.6) hue-rotate(5deg);
+
+    /* custom player controls (native <audio> is hidden) */
+    .bar-btn {
+      flex-shrink: 0;
+      width: 2.6rem; height: 2.6rem;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: transparent;
+      color: var(--accent);
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.3s var(--ease), color 0.3s var(--ease), background 0.3s var(--ease);
     }
+    .bar-btn:hover { border-color: var(--accent); background: rgba(201,168,106,0.08); }
+    .bar-time {
+      flex-shrink: 0;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.85rem; color: var(--ink-dim);
+      min-width: 5.5rem; text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    /* thin 3px track, but a tall transparent hit-area (padding) so it's easy to click */
+    .bar-seek {
+      flex: 1;
+      height: 3px;
+      background: var(--line);
+      border-radius: 2px;
+      cursor: pointer;
+      position: relative;
+      /* enlarge clickable area vertically without changing the visual bar */
+      padding: 14px 0;
+      background-clip: content-box;
+      box-sizing: content-box;
+    }
+    .bar-seek .fill {
+      position: absolute; left: 0; top: 14px; height: 3px;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 2px;
+      pointer-events: none;
+    }
+    .bar-seek .knob {
+      position: absolute; top: 50%;
+      left: 0%;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      transition: opacity 0.25s var(--ease);
+      pointer-events: none;
+    }
+    .bar-seek:hover .knob { opacity: 1; }
 
     /* ---- entry overlay ---- */
     .overlay {
@@ -206,10 +255,12 @@
     @keyframes pulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
 
     @media (max-width: 640px) {
-      .bar { padding: 0.8rem 5vw; gap: 0.8rem; flex-wrap: wrap; }
-      .bar-info { width: 100%; text-align: center; }
-      .bar audio { flex: 1 0 100%; }
-      .wrap { padding-bottom: 12rem; }
+      .bar { padding: 0.8rem 5vw; gap: 0.7rem; flex-wrap: wrap; }
+      .bar-info { width: calc(100% - 3.3rem); order: 1; }
+      .bar-btn { order: 2; }
+      .bar-seek { order: 3; flex: 1 0 70%; }
+      .bar-time { order: 4; }
+      .wrap { padding-bottom: 11rem; }
     }
     @media (prefers-reduced-motion: reduce) {
       header, .search, .list { animation: none; }
@@ -234,11 +285,17 @@
 
   <!-- persistent now-playing bar: survives search re-renders, drives the loop -->
   <div class="bar" id="bar">
+    <button class="bar-btn" id="barBtn" aria-label="播放/暂停">▶</button>
     <div class="bar-info">
       <div class="bar-name" id="barName">—</div>
       <div class="bar-artist" id="barArtist"></div>
     </div>
-    <audio id="player" controls></audio>
+    <div class="bar-seek" id="barSeek">
+      <div class="fill" id="barFill"></div>
+      <div class="knob" id="barKnob"></div>
+    </div>
+    <div class="bar-time" id="barTime">0:00 / 0:00</div>
+    <audio id="player" style="display:none"></audio>
   </div>
 
   <div class="overlay" id="overlay">
@@ -250,8 +307,8 @@
 
   <script>
     // Playlist comes from songs.json, generated at build time by scanning
-    // static/audios/. To add a song: upload the mp3. To hide one: prefix
-    // its filename with "_". No code edits needed.
+    // static/audios/. To add a song: upload the mp3. To hide one: end its
+    // filename with "hide" or "隐藏". No code edits needed.
     let TRACKS = [];
 
     const listEl   = document.getElementById('list');
@@ -260,9 +317,21 @@
     const bar      = document.getElementById('bar');
     const barName  = document.getElementById('barName');
     const barArtist= document.getElementById('barArtist');
+    const barBtn   = document.getElementById('barBtn');
+    const barSeek  = document.getElementById('barSeek');
+    const barFill  = document.getElementById('barFill');
+    const barKnob  = document.getElementById('barKnob');
+    const barTime  = document.getElementById('barTime');
     const overlay  = document.getElementById('overlay');
 
-    let currentIdx = -1; // index into TRACKS of the playing song
+    let currentIdx = -1; // index into TRACKS of the loaded song
+
+    function fmt(s) {
+      if (!isFinite(s) || s < 0) s = 0;
+      const m = Math.floor(s / 60);
+      const sec = Math.floor(s % 60);
+      return m + ':' + String(sec).padStart(2, '0');
+    }
 
     function render(filter) {
       const f = (filter || '').trim().toLowerCase();
@@ -277,24 +346,38 @@
         listEl.appendChild(li);
         return;
       }
+      const isPlaying = currentIdx >= 0 && !player.paused;
       shown.forEach((t) => {
         const idx = TRACKS.indexOf(t);
+        const active = idx === currentIdx;
         const li = document.createElement('li');
-        li.className = 'track' + (idx === currentIdx ? ' playing' : '');
+        li.className = 'track' + (active ? ' playing' : '');
         li.dataset.idx = idx;
+        // ❚❚ when this song is actively playing, ▸ otherwise
+        const glyph = active && isPlaying ? '❚❚' : '▸';
         li.innerHTML =
           '<span class="track-num">' + String(idx + 1).padStart(2, '0') + '</span>' +
           '<div class="track-meta">' +
             '<div class="track-name">' + t.name + '</div>' +
             (t.artist ? '<div class="track-artist">' + t.artist + '</div>' : '') +
           '</div>' +
-          '<span class="track-play">' + (idx === currentIdx ? '❚❚' : '▸') + '</span>';
-        li.addEventListener('click', () => play(idx));
+          '<span class="track-play">' + glyph + '</span>';
+        li.addEventListener('click', () => toggle(idx));
         listEl.appendChild(li);
       });
     }
 
-    function play(idx) {
+    // click a row: same song -> pause/resume; different song -> switch
+    function toggle(idx) {
+      if (idx === currentIdx) {
+        if (player.paused) player.play().catch(() => {});
+        else player.pause();
+      } else {
+        load(idx);
+      }
+    }
+
+    function load(idx) {
       currentIdx = idx;
       const t = TRACKS[idx];
       player.src = t.src;
@@ -302,22 +385,72 @@
       barArtist.textContent = t.artist || '';
       bar.classList.add('up');
       player.play().catch(() => {});
-      render(qEl.value); // refresh highlight + play/pause glyphs
     }
 
     function playRandom() {
       if (TRACKS.length === 0) return;
       let next = Math.floor(Math.random() * TRACKS.length);
-      // avoid immediately repeating the same song when more than one exists
       if (TRACKS.length > 1 && next === currentIdx) next = (next + 1) % TRACKS.length;
-      play(next);
+      load(next);
     }
 
-    // infinite loop: when a song ends, jump to another random one
-    player.addEventListener('ended', playRandom);
-    // keep list glyphs in sync if user pauses/plays via the bar controls
-    player.addEventListener('pause', () => render(qEl.value));
-    player.addEventListener('play',  () => render(qEl.value));
+    // ── custom player controls ──────────────────────────────────────
+    barBtn.addEventListener('click', () => {
+      if (currentIdx < 0) { playRandom(); return; }
+      if (player.paused) player.play().catch(() => {});
+      else player.pause();
+    });
+
+    function seekTo(clientX) {
+      const r = barSeek.getBoundingClientRect();
+      const ratio = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+      const d = player.duration;
+      if (isFinite(d) && d > 0) {
+        player.currentTime = ratio * d;
+        // reflect immediately even while paused
+        barFill.style.width = (ratio * 100) + '%';
+        barKnob.style.left = (ratio * 100) + '%';
+        barTime.textContent = fmt(player.currentTime) + ' / ' + fmt(d);
+      }
+    }
+    barSeek.addEventListener('click', (e) => seekTo(e.clientX));
+    // click-drag to scrub
+    let seeking = false;
+    barSeek.addEventListener('pointerdown', (e) => { seeking = true; seekTo(e.clientX); });
+    window.addEventListener('pointermove', (e) => { if (seeking) seekTo(e.clientX); });
+    window.addEventListener('pointerup', () => { seeking = false; });
+
+    player.addEventListener('timeupdate', () => {
+      const d = player.duration || 0;
+      const pct = d ? (player.currentTime / d) * 100 : 0;
+      barFill.style.width = pct + '%';
+      barKnob.style.left = pct + '%';
+      barTime.textContent = fmt(player.currentTime) + ' / ' + fmt(d);
+    });
+
+    // keep button glyph + list glyphs in sync with actual state
+    function syncUI() {
+      barBtn.textContent = (currentIdx >= 0 && !player.paused) ? '❚❚' : '▶';
+      render(qEl.value);
+    }
+    player.addEventListener('play', syncUI);
+    player.addEventListener('pause', syncUI);
+    player.addEventListener('ended', playRandom); // endless loop
+
+    // format compatibility: if the browser can't decode this file (e.g. flac
+    // or ogg on Safari), don't fail silently — show a hint, then move on so
+    // the loop isn't stuck. Guard against an all-unplayable list.
+    let failStreak = 0;
+    player.addEventListener('error', () => {
+      if (currentIdx < 0) return;
+      barArtist.textContent = '当前浏览器无法播放此格式';
+      failStreak++;
+      if (failStreak < TRACKS.length) {
+        setTimeout(playRandom, 1500); // try another track
+      }
+    });
+    // a successful load clears the streak
+    player.addEventListener('playing', () => { failStreak = 0; });
 
     qEl.addEventListener('input', () => render(qEl.value));
 

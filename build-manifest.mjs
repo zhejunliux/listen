@@ -10,7 +10,7 @@
 import { readdirSync, writeFileSync } from 'node:fs';
 
 const DIR = 'static/audios';
-const AUDIO = /\.(mp3|m4a|ogg|wav|flac|aac)$/i;
+const AUDIO = /\.(mp3|m4a|ogg|oga|opus|wav|flac|aac|weba|webm)$/i;
 // filename ends with " hide" / "-hide" / "隐藏" (etc.) right before the extension
 const HIDDEN = /[ _\-]*(hide|隐藏)$/i;
 
